@@ -1,6 +1,6 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { Mesh, MeshBasicMaterial, PlaneGeometry, TextureLoader, Vector2 } from 'three';
-import type { ImageLayerInstance, LayerInstance, RuntimeLayer } from './Layer';
+import type { ImageLayerInstance, LayerInstance, LayerTransform, RuntimeLayer } from './Layer';
 import { toThreeBlending } from './Layer';
 
 const textureLoader = new TextureLoader();
@@ -63,11 +63,7 @@ export class ImageLayer implements RuntimeLayer {
     }
 
     this.mesh.visible = layer.visible;
-    this.mesh.position.set(layer.transform.x, layer.transform.y, 0);
-    this.mesh.rotation.z = layer.transform.rotation;
-
-    const scale = Math.max(0.0001, layer.transform.scale);
-    this.mesh.scale.set(this.intrinsicSize.x * scale, this.intrinsicSize.y * scale, 1);
+    this.applyTransform(layer.transform);
   }
 
   dispose(): void {
@@ -76,5 +72,24 @@ export class ImageLayer implements RuntimeLayer {
     }
     this.mesh.geometry.dispose();
     this.material.dispose();
+  }
+
+  isReady(): boolean {
+    return true;
+  }
+
+  applyRuntimePatch(patch: { transform?: LayerTransform }): void {
+    if (!patch.transform) {
+      return;
+    }
+    this.applyTransform(patch.transform);
+  }
+
+  private applyTransform(transform: LayerTransform): void {
+    this.mesh.position.set(transform.x, transform.y, 0);
+    this.mesh.rotation.z = transform.rotation;
+
+    const scale = Math.max(0.0001, transform.scale);
+    this.mesh.scale.set(this.intrinsicSize.x * scale, this.intrinsicSize.y * scale, 1);
   }
 }

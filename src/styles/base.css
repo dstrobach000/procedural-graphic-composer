@@ -382,6 +382,67 @@ label {
   border-left: 4px solid var(--danger);
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  padding: 1rem;
+}
+
+.modal-card {
+  width: min(720px, 100%);
+  max-height: min(86vh, 920px);
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(21, 26, 35, 0.98);
+  box-shadow: var(--shadow);
+}
+
+.modal-header {
+  padding: 0.8rem 0.95rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-section {
+  padding: 0.75rem 0.95rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.modal-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.modal-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.8rem 0.95rem;
+}
+
+.modal-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
 @media (max-width: 1220px) {
   .workspace {
     grid-template-columns: 250px 1fr;

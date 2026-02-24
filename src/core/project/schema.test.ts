@@ -77,4 +77,59 @@ describe('project schema', () => {
 
     expect(parsedShader.params.uniforms.u_amount?.value).toBe(0.75);
   });
+
+  it('injects a default layout for legacy projects missing layout fields', () => {
+    const project = createDefaultProject();
+    const legacyProject = {
+      version: project.version,
+      seed: project.seed,
+      canvas: project.canvas,
+      layers: project.layers,
+      effectChain: project.effectChain,
+      snapshots: project.snapshots,
+      exportPresets: project.exportPresets,
+    };
+
+    const parsed = parseProject(legacyProject);
+    expect(parsed.activeLayoutId).toBe('default');
+    expect(parsed.layouts.default?.width).toBe(project.canvas.width);
+    expect(parsed.layouts.default?.height).toBe(project.canvas.height);
+  });
+
+  it('parses text layer payloads', () => {
+    const project = createDefaultProject();
+    const textLayer = {
+      id: 'text-1',
+      type: 'text' as const,
+      name: 'Headline',
+      visible: true,
+      blendMode: 'normal' as const,
+      opacity: 1,
+      transform: {
+        x: 0,
+        y: 0,
+        scale: 1,
+        rotation: 0,
+      },
+      seedOffset: 0,
+      script: {
+        enabled: true,
+        source: 'return { transform: { x: 10 } };',
+      },
+      params: {
+        text: 'HELLO',
+        fontPath: '/fonts/kenpixel.ttf',
+        fontSize: 160,
+        letterSpacing: 1,
+      },
+    };
+
+    const parsed = parseProject({
+      ...project,
+      layers: [textLayer],
+    });
+
+    const parsedTextLayer = parsed.layers[0];
+    expect(parsedTextLayer?.type).toBe('text');
+  });
 });

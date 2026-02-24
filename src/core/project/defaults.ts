@@ -26,12 +26,33 @@ void main() {
 `;
 
 export function createDefaultProject(): Project {
+  const layouts = {
+    instagramPortrait: {
+      id: 'instagramPortrait',
+      name: 'Instagram Portrait',
+      width: 1080,
+      height: 1350,
+    },
+    square: {
+      id: 'square',
+      name: 'Square',
+      width: 1080,
+      height: 1080,
+    },
+    a3_300dpi: {
+      id: 'a3_300dpi',
+      name: 'A3 (300dpi)',
+      width: 3508,
+      height: 4961,
+    },
+  } as const;
+
   return {
     version: '0.1',
     seed: 1337,
     canvas: {
-      width: 1080,
-      height: 1350,
+      width: layouts.instagramPortrait.width,
+      height: layouts.instagramPortrait.height,
     },
     layers: [
       {
@@ -48,6 +69,10 @@ export function createDefaultProject(): Project {
           rotation: 0,
         },
         seedOffset: 0,
+        script: {
+          enabled: false,
+          source: '',
+        },
         params: {
           fragment: defaultShaderFragment,
           uniforms: {
@@ -78,6 +103,8 @@ export function createDefaultProject(): Project {
       },
     ],
     snapshots: [],
+    layouts,
+    activeLayoutId: 'instagramPortrait',
     exportPresets: [
       {
         id: 'instagram-1080x1350',

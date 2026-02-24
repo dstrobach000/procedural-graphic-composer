@@ -2,6 +2,7 @@ import { OrthographicCamera, Vector2 } from 'three';
 import { EffectChain } from '../effects/EffectChain';
 import { LayerFactory } from '../layers/LayerFactory';
 import type { Project } from '../project/schema';
+import { validateLayerScript, type LayerScriptValidationResult } from '../scripts/layerScript';
 import { createRenderer, resizeRenderer } from './Renderer';
 import { createSceneRoot, setSceneRootSize } from './SceneRoot';
 
@@ -12,6 +13,8 @@ export type EngineOptions = {
 export type ShaderCompileValidationResult =
   | { ok: true }
   | { ok: false; error: string };
+
+export type ScriptCompileValidationResult = LayerScriptValidationResult;
 
 export class Engine {
   private readonly options: EngineOptions;
@@ -36,6 +39,8 @@ export class Engine {
 
   private lastProject: Project | null = null;
 
+  private syncQueue: Promise<void> = Promise.resolve();
+
   constructor(canvas: HTMLCanvasElement, options: EngineOptions = {}) {
     this.options = options;
     this.renderer = createRenderer(canvas);
@@ -50,21 +55,9 @@ export class Engine {
     this.loop();
   }
 
-  async syncProject(project: Project): Promise<void> {
-    if (this.disposed) {
-      return;
-    }
-
-    try {
-      this.worldSize.set(Math.max(1, project.canvas.width), Math.max(1, project.canvas.height));
-      setSceneRootSize(this.sceneRoot.camera, this.worldSize.x, this.worldSize.y);
-
-      await this.layerFactory.sync(project.layers, project.seed);
-      this.effectChain.sync(project.effectChain, project.seed);
-      this.lastProject = project;
-    } catch (error) {
-      this.options.onError?.(toError(error));
-    }
+  syncProject(project: Project): Promise<void> {
+    this.syncQueue = this.syncQueue.then(() => this.applyProjectSync(project));
+    return this.syncQueue;
   }
 
   resize(width: number, height: number): void {
@@ -87,10 +80,14 @@ export class Engine {
     this.effectChain.render(elapsed, this.viewportSize.x, this.viewportSize.y);
   }
 
-  renderToImage(width: number, height: number): Uint8Array {
+  async renderToImage(width: number, height: number): Promise<Uint8Array> {
     if (this.disposed) {
       throw new Error('Engine has been disposed');
     }
+    await this.syncQueue;
+
+    await this.layerFactory.waitUntilReady();
+
     if (!this.lastProject) {
       throw new Error('Project has not been synced yet');
     }
@@ -174,6 +171,10 @@ void main() {
     }
   }
 
+  validateLayerScript(source: string): ScriptCompileValidationResult {
+    return validateLayerScript(source);
+  }
+
   dispose(): void {
     this.disposed = true;
     if (this.frameHandle !== null) {
@@ -192,6 +193,23 @@ void main() {
     this.renderFrame();
     this.frameHandle = requestAnimationFrame(this.loop);
   };
+
+  private async applyProjectSync(project: Project): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+
+    try {
+      this.worldSize.set(Math.max(1, project.canvas.width), Math.max(1, project.canvas.height));
+      setSceneRootSize(this.sceneRoot.camera, this.worldSize.x, this.worldSize.y);
+
+      await this.layerFactory.sync(project.layers, project.seed);
+      this.effectChain.sync(project.effectChain, project.seed);
+      this.lastProject = project;
+    } catch (error) {
+      this.options.onError?.(toError(error));
+    }
+  }
 }
 
 function toError(error: unknown): Error {

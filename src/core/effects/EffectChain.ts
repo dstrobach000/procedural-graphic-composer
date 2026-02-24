@@ -84,14 +84,25 @@ export class EffectChain {
   }
 
   renderToPixels(width: number, height: number, timeSeconds: number): Uint8Array {
-    this.setSize(width, height);
-    this.applyFrameUniforms(timeSeconds, width, height);
-    this.composer.render();
+    const previousRenderToScreen = this.composer.renderToScreen;
+    this.composer.renderToScreen = false;
 
-    const target = this.composer.readBuffer;
-    const pixels = new Uint8Array(width * height * 4);
-    this.renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
-    return pixels;
+    try {
+      this.setSize(width, height);
+      this.applyFrameUniforms(timeSeconds, width, height);
+      this.composer.render();
+
+      const pixels = new Uint8Array(width * height * 4);
+      const readTarget = this.composer.readBuffer;
+      this.renderer.readRenderTargetPixels(readTarget, 0, 0, width, height, pixels);
+      if (isZeroBuffer(pixels)) {
+        const writeTarget = this.composer.writeBuffer;
+        this.renderer.readRenderTargetPixels(writeTarget, 0, 0, width, height, pixels);
+      }
+      return pixels;
+    } finally {
+      this.composer.renderToScreen = previousRenderToScreen;
+    }
   }
 
   dispose(): void {
@@ -109,4 +120,13 @@ export class EffectChain {
       }
     }
   }
+}
+
+function isZeroBuffer(buffer: Uint8Array): boolean {
+  for (let index = 0; index < buffer.length; index += 1) {
+    if (buffer[index] !== 0) {
+      return false;
+    }
+  }
+  return true;
 }

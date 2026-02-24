@@ -1,14 +1,21 @@
 import { nanoid } from 'nanoid';
 import { create } from 'zustand';
-import type { Engine, ShaderCompileValidationResult } from '../core/engine/Engine';
+import { exportBatch as exportBatchFiles } from '../core/export/exportBatch';
+import type {
+  Engine,
+  ScriptCompileValidationResult,
+  ShaderCompileValidationResult,
+} from '../core/engine/Engine';
 import { exportPNG as exportPNGFile } from '../core/export/exportPNG';
 import type { ExportPresetId } from '../core/export/presets';
 import { getPresetById } from '../core/export/presets';
 import type { LayerInstance } from '../core/layers/Layer';
+import { defaultTextFontPath } from '../core/layers/textFonts';
 import { defaultShaderFragment, createDefaultProject } from '../core/project/defaults';
 import { loadProjectFromDisk, saveProjectToDisk } from '../core/project/io';
 import type { EffectInstance, Project } from '../core/project/schema';
 import { nextDeterministicSeed } from '../core/rng/prng';
+import { applyActiveLayout } from './layouts';
 import { applySnapshot, cloneProject, createSnapshot, reorderLayers } from './projectStateUtils';
 import { buildVariationProject } from './variation';
 
@@ -21,6 +28,12 @@ export type Notification = {
 type ExportCustomSize = {
   width: number;
   height: number;
+};
+
+type BatchExportSelection = {
+  snapshotIds: string[];
+  layoutIds: string[];
+  directory: string;
 };
 
 type ProjectState = {
@@ -42,9 +55,11 @@ type ProjectState = {
   selectLayer(id: string | null): void;
   updateLayer(id: string, patch: Partial<LayerInstance>): void;
   attemptUpdateShaderFragment(id: string, fragment: string): Promise<ShaderCompileValidationResult>;
+  attemptUpdateLayerScript(id: string, source: string): Promise<ScriptCompileValidationResult>;
   addEffect(type: EffectInstance['type']): void;
   updateEffect(id: string, patch: Partial<EffectInstance>): void;
   removeEffect(id: string): void;
+  setActiveLayout(layoutId: string): void;
   randomizeSeed(): void;
   variation(): void;
   resetVariation(): void;
@@ -52,6 +67,7 @@ type ProjectState = {
   loadSnapshot(snapshotId: string): void;
   setCustomExportSize(size: Partial<ExportCustomSize>): void;
   exportPNG(presetId: ExportPresetId): Promise<void>;
+  exportBatch(selection: BatchExportSelection): Promise<void>;
 };
 
 function pushNotification(state: ProjectState, notification: Notification): Notification[] {
@@ -138,42 +154,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   addLayer(type) {
-    const layer: LayerInstance =
-      type === 'image'
-        ? {
-            id: nanoid(),
-            type: 'image',
-            name: 'Image Layer',
-            visible: true,
-            blendMode: 'normal',
-            opacity: 1,
-            transform: { x: 0, y: 0, scale: 1, rotation: 0 },
-            seedOffset: 0,
-            params: { src: '' },
-          }
-        : {
-            id: nanoid(),
-            type: 'shader',
-            name: 'Shader Layer',
-            visible: true,
-            blendMode: 'normal',
-            opacity: 1,
-            transform: { x: 0, y: 0, scale: 1, rotation: 0 },
-            seedOffset: 0,
-            params: {
-              fragment: defaultShaderFragment,
-              uniforms: {
-                u_intensity: {
-                  value: 0.35,
-                  min: 0,
-                  max: 1,
-                  step: 0.01,
-                  randomizable: true,
-                },
-              },
-              sizing: { mode: 'fullscreen' },
-            },
-          };
+    const layer: LayerInstance = createLayer(type);
 
     set((state) => ({
       project: {
@@ -277,6 +258,52 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     return { ok: true };
   },
 
+  async attemptUpdateLayerScript(id, source) {
+    const state = get();
+    const layer = state.project.layers.find((entry) => entry.id === id);
+    if (!layer) {
+      return {
+        ok: false,
+        error: 'Selected layer does not exist.',
+      };
+    }
+
+    if (!state.engine) {
+      return {
+        ok: false,
+        error: 'Renderer is not ready yet.',
+      };
+    }
+
+    const compileResult = state.engine.validateLayerScript(source);
+    if (!compileResult.ok) {
+      state.notify(`Script compile failed: ${compileResult.error}`, 'error');
+      return compileResult;
+    }
+
+    set((current) => ({
+      project: {
+        ...current.project,
+        layers: current.project.layers.map((entry) => {
+          if (entry.id !== id) {
+            return entry;
+          }
+          return {
+            ...entry,
+            script: {
+              enabled: entry.script?.enabled ?? false,
+              source,
+            },
+          };
+        }),
+      },
+      lastVariationBase: null,
+    }));
+
+    state.notify('Script compiled and applied');
+    return { ok: true };
+  },
+
   addEffect(type) {
     const effect: EffectInstance = {
       id: nanoid(),
@@ -325,6 +352,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       },
       lastVariationBase: null,
     }));
+  },
+
+  setActiveLayout(layoutId) {
+    set((state) => {
+      const nextProject = applyActiveLayout(state.project, layoutId);
+      if (nextProject === state.project) {
+        return state;
+      }
+
+      return {
+        project: nextProject,
+        lastVariationBase: null,
+      };
+    });
   },
 
   randomizeSeed() {
@@ -406,10 +447,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   async exportPNG(presetId) {
     try {
-      const { engine, customExportSize } = get();
+      const { engine, customExportSize, project } = get();
       if (!engine) {
         throw new Error('Renderer is not ready yet.');
       }
+
+      await engine.syncProject(project);
 
       const size =
         presetId === 'custom'
@@ -417,6 +460,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
               width: Math.max(1, Math.floor(customExportSize.width)),
               height: Math.max(1, Math.floor(customExportSize.height)),
             }
+          : presetId === 'current-layout'
+            ? {
+                width: Math.max(1, Math.floor(project.canvas.width)),
+                height: Math.max(1, Math.floor(project.canvas.height)),
+              }
           : {
               width: getPresetById(presetId).width,
               height: getPresetById(presetId).height,
@@ -430,8 +478,101 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       get().notify(`Failed to export PNG: ${toErrorMessage(error)}`, 'error');
     }
   },
+
+  async exportBatch(selection) {
+    try {
+      const { engine, project } = get();
+      if (!engine) {
+        throw new Error('Renderer is not ready yet.');
+      }
+
+      await engine.syncProject(project);
+
+      const result = await exportBatchFiles(engine, cloneProject(project), {
+        snapshotIds: selection.snapshotIds,
+        layoutIds: selection.layoutIds,
+        directory: selection.directory,
+        format: 'png',
+      });
+
+      get().notify(`Batch export complete: ${result.written} files`);
+    } catch (error) {
+      get().notify(`Failed to export batch: ${toErrorMessage(error)}`, 'error');
+    }
+  },
 }));
 
 export function getClonedProject(): Project {
   return cloneProject(useProjectStore.getState().project);
+}
+
+function createLayer(type: LayerInstance['type']): LayerInstance {
+  switch (type) {
+    case 'image':
+      return {
+        id: nanoid(),
+        type: 'image',
+        name: 'Image Layer',
+        visible: true,
+        blendMode: 'normal',
+        opacity: 1,
+        transform: { x: 0, y: 0, scale: 1, rotation: 0 },
+        seedOffset: 0,
+        script: {
+          enabled: false,
+          source: '',
+        },
+        params: { src: '' },
+      };
+    case 'text':
+      return {
+        id: nanoid(),
+        type: 'text',
+        name: 'Text Layer',
+        visible: true,
+        blendMode: 'normal',
+        opacity: 1,
+        transform: { x: 0, y: 0, scale: 1, rotation: 0 },
+        seedOffset: 0,
+        script: {
+          enabled: false,
+          source: '',
+        },
+        params: {
+          text: 'HELLO',
+          fontPath: defaultTextFontPath,
+          fontSize: 180,
+          letterSpacing: 0,
+        },
+      };
+    case 'shader':
+    default:
+      return {
+        id: nanoid(),
+        type: 'shader',
+        name: 'Shader Layer',
+        visible: true,
+        blendMode: 'normal',
+        opacity: 1,
+        transform: { x: 0, y: 0, scale: 1, rotation: 0 },
+        seedOffset: 0,
+        script: {
+          enabled: false,
+          source: '',
+        },
+        params: {
+          fragment: defaultShaderFragment,
+          uniforms: {
+            u_intensity: {
+              value: 0.35,
+              min: 0,
+              max: 1,
+              step: 0.01,
+              randomizable: true,
+            },
+          },
+          sizing: { mode: 'fullscreen' },
+        },
+      };
+  }
 }

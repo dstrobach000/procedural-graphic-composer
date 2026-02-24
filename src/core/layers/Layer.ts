@@ -29,6 +29,10 @@ export type BaseLayerInstance = {
   opacity: number;
   transform: LayerTransform;
   seedOffset: number;
+  script?: {
+    enabled: boolean;
+    source: string;
+  };
 };
 
 export type ImageLayerInstance = BaseLayerInstance & {
@@ -51,6 +55,16 @@ export type ShaderLayerInstance = BaseLayerInstance & {
   };
 };
 
+export type TextLayerInstance = BaseLayerInstance & {
+  type: 'text';
+  params: {
+    text: string;
+    fontPath: string;
+    fontSize: number;
+    letterSpacing: number;
+  };
+};
+
 export type ShaderUniform = {
   value: number;
   min?: number;
@@ -61,13 +75,18 @@ export type ShaderUniform = {
 
 export type ShaderUniformMap = Record<string, ShaderUniform>;
 
-export type LayerInstance = ImageLayerInstance | ShaderLayerInstance;
+export type LayerInstance = ImageLayerInstance | ShaderLayerInstance | TextLayerInstance;
 
 export interface RuntimeLayer {
   id: string;
   kind: LayerInstance['type'];
   mesh: Mesh;
   update(layer: LayerInstance, seed: number): Promise<void> | void;
+  isReady(): boolean;
+  applyRuntimePatch?(patch: {
+    transform?: LayerTransform;
+    uniforms?: Record<string, number>;
+  }): void;
   tick?(timeSeconds: number, resolution: { width: number; height: number }): void;
   dispose(): void;
 }

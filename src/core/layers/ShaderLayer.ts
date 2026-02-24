@@ -1,5 +1,11 @@
 import { Mesh, PlaneGeometry, ShaderMaterial, Vector2 } from 'three';
-import type { LayerInstance, RuntimeLayer, ShaderLayerInstance, ShaderUniformMap } from './Layer';
+import type {
+  LayerInstance,
+  LayerTransform,
+  RuntimeLayer,
+  ShaderLayerInstance,
+  ShaderUniformMap,
+} from './Layer';
 import { toThreeBlending } from './Layer';
 
 const vertexShader = `
@@ -109,7 +115,6 @@ export class ShaderLayer implements RuntimeLayer {
     }
 
     this.mesh.visible = layer.visible;
-    this.mesh.rotation.z = layer.transform.rotation;
 
     this.applyGeometry(layer);
   }
@@ -143,15 +148,41 @@ export class ShaderLayer implements RuntimeLayer {
     this.material.dispose();
   }
 
-  private applyGeometry(layer: ShaderLayerInstance): void {
+  isReady(): boolean {
+    return true;
+  }
+
+  applyRuntimePatch(patch: { transform?: LayerTransform; uniforms?: Record<string, number> }): void {
+    if (!this.currentLayerRef) {
+      return;
+    }
+
+    if (patch.transform) {
+      this.applyGeometry(this.currentLayerRef, patch.transform);
+    }
+
+    if (patch.uniforms) {
+      for (const [name, value] of Object.entries(patch.uniforms)) {
+        if (RESERVED_UNIFORMS.has(name)) {
+          continue;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          this.upsertNumberUniform(name, value);
+        }
+      }
+    }
+  }
+
+  private applyGeometry(layer: ShaderLayerInstance, transform: LayerTransform = layer.transform): void {
     const sizing = layer.params.sizing ?? { mode: 'fullscreen' as const };
 
     const baseWidthPx = sizing.mode === 'custom' ? Math.max(1, sizing.width ?? 100) : this.resolution.x;
     const baseHeightPx = sizing.mode === 'custom' ? Math.max(1, sizing.height ?? 100) : this.resolution.y;
 
-    const scale = Math.max(0.0001, layer.transform.scale);
+    const scale = Math.max(0.0001, transform.scale);
     this.mesh.scale.set(baseWidthPx * scale, baseHeightPx * scale, 1);
-    this.mesh.position.set(layer.transform.x, layer.transform.y, 0);
+    this.mesh.position.set(transform.x, transform.y, 0);
+    this.mesh.rotation.z = transform.rotation;
   }
 
   private computeLayerSizePx(): Vector2 {

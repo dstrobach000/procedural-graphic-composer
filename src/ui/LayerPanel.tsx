@@ -27,6 +27,9 @@ export function LayerPanel() {
         <button type="button" onClick={() => addLayer('image')}>
           + Image
         </button>
+        <button type="button" onClick={() => addLayer('text')}>
+          + Text
+        </button>
         <button type="button" onClick={() => addLayer('shader')}>
           + Shader
         </button>

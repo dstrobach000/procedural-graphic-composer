@@ -18,6 +18,7 @@ These rules are strict for v0.1 and future updates.
   - shader uniform values where `randomizable: true` and `min`/`max` are defined
 - Variation must never progressively mutate from previously varied values.
 - Any randomness in shaders/effects must be seeded by deterministic uniforms.
+- Any script randomness must come from deterministic layer-seeded RNG, never `Math.random()`.
 
 ## Architecture Rules
 
@@ -27,6 +28,8 @@ These rules are strict for v0.1 and future updates.
   - `src/ui` for presentation + user input wiring
 - Avoid giant files. Split files once they exceed practical readability.
 - Keep strong TypeScript typing; avoid `any` unless there is no alternative.
+- Layout presets are camera/canvas profiles only; do not introduce artboards or per-layout layer overrides in v0.1.
+- Script execution is runtime-only and layer-local; never allow scripts to mutate store/project state directly.
 
 ## Data Contract Rules
 
@@ -40,6 +43,7 @@ These rules are strict for v0.1 and future updates.
 - Layer composition remains ordered and global post-processing runs once after layers.
 - Blend modes mapping must stay explicit and tested.
 - Any export path must render at target resolution, never viewport screenshot shortcuts.
+- Batch export must run from cloned snapshot state and restore original engine state after completion.
 
 ## Render Determinism Rule
 

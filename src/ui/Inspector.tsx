@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { ShaderCompileValidationResult } from '../core/engine/Engine';
+import type { ScriptCompileValidationResult, ShaderCompileValidationResult } from '../core/engine/Engine';
 import { blendModes } from '../core/layers/Layer';
-import type { LayerInstance, ShaderLayerInstance, ShaderUniform } from '../core/layers/Layer';
+import { textFontOptions } from '../core/layers/textFonts';
+import type { LayerInstance, ShaderLayerInstance, ShaderUniform, TextLayerInstance } from '../core/layers/Layer';
 import { useProjectStore } from '../store/useProjectStore';
+import { ScriptEditor } from './ScriptEditor';
 import { ShaderEditor } from './ShaderEditor';
 
 export function Inspector() {
@@ -12,6 +14,7 @@ export function Inspector() {
   const selectedLayerId = useProjectStore((state) => state.selectedLayerId);
   const updateLayer = useProjectStore((state) => state.updateLayer);
   const attemptUpdateShaderFragment = useProjectStore((state) => state.attemptUpdateShaderFragment);
+  const attemptUpdateLayerScript = useProjectStore((state) => state.attemptUpdateLayerScript);
   const addEffect = useProjectStore((state) => state.addEffect);
   const updateEffect = useProjectStore((state) => state.updateEffect);
   const removeEffect = useProjectStore((state) => state.removeEffect);
@@ -149,6 +152,8 @@ export function Inspector() {
 
           {selectedLayer.type === 'image' ? (
             <ImageLayerInspector layer={selectedLayer} updateLayer={updateLayer} />
+          ) : selectedLayer.type === 'text' ? (
+            <TextLayerInspector layer={selectedLayer} updateLayer={updateLayer} />
           ) : (
             <ShaderLayerInspector
               key={selectedLayer.id}
@@ -157,6 +162,12 @@ export function Inspector() {
               attemptUpdateShaderFragment={attemptUpdateShaderFragment}
             />
           )}
+
+          <LayerScriptInspector
+            layer={selectedLayer}
+            updateLayer={updateLayer}
+            attemptUpdateLayerScript={attemptUpdateLayerScript}
+          />
         </div>
       ) : (
         <div className="inspector-empty">Select a layer to edit properties.</div>
@@ -271,6 +282,134 @@ function ImageLayerInspector({
       >
         Browse Image
       </button>
+    </div>
+  );
+}
+
+function TextLayerInspector({
+  layer,
+  updateLayer,
+}: {
+  layer: TextLayerInstance;
+  updateLayer: (id: string, patch: Partial<LayerInstance>) => void;
+}) {
+  return (
+    <div className="inspector-section">
+      <label>
+        Text
+        <textarea
+          rows={3}
+          value={layer.params.text}
+          onChange={(event) =>
+            updateLayer(layer.id, {
+              params: {
+                ...layer.params,
+                text: event.target.value,
+              },
+            } as Partial<LayerInstance>)
+          }
+        />
+      </label>
+
+      <label>
+        Font
+        <select
+          value={layer.params.fontPath}
+          onChange={(event) =>
+            updateLayer(layer.id, {
+              params: {
+                ...layer.params,
+                fontPath: event.target.value,
+              },
+            } as Partial<LayerInstance>)
+          }
+        >
+          {textFontOptions.map((font) => (
+            <option key={font.path} value={font.path}>
+              {font.label}
+            </option>
+          ))}
+          {!textFontOptions.some((font) => font.path === layer.params.fontPath) ? (
+            <option value={layer.params.fontPath}>{layer.params.fontPath}</option>
+          ) : null}
+        </select>
+      </label>
+
+      <label>
+        Font Path
+        <input
+          value={layer.params.fontPath}
+          onChange={(event) =>
+            updateLayer(layer.id, {
+              params: {
+                ...layer.params,
+                fontPath: event.target.value,
+              },
+            } as Partial<LayerInstance>)
+          }
+        />
+      </label>
+
+      <button
+        type="button"
+        onClick={() => {
+          void (async () => {
+            const file = await open({
+              multiple: false,
+              directory: false,
+              filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
+            });
+            if (!file || Array.isArray(file)) {
+              return;
+            }
+
+            updateLayer(layer.id, {
+              params: {
+                ...layer.params,
+                fontPath: file,
+              },
+            } as Partial<LayerInstance>);
+          })();
+        }}
+      >
+        Browse Font
+      </button>
+
+      <div className="inspector-grid">
+        <label>
+          Font Size
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={layer.params.fontSize}
+            onChange={(event) =>
+              updateLayer(layer.id, {
+                params: {
+                  ...layer.params,
+                  fontSize: Math.max(1, Number(event.target.value)),
+                },
+              } as Partial<LayerInstance>)
+            }
+          />
+        </label>
+        <label>
+          Letter Spacing
+          <input
+            type="number"
+            step={0.1}
+            value={layer.params.letterSpacing}
+            onChange={(event) =>
+              updateLayer(layer.id, {
+                params: {
+                  ...layer.params,
+                  letterSpacing: Number(event.target.value),
+                },
+              } as Partial<LayerInstance>)
+            }
+          />
+        </label>
+      </div>
     </div>
   );
 }
@@ -495,6 +634,46 @@ function ShaderLayerInspector({
     </div>
   );
 }
+
+function LayerScriptInspector({
+  layer,
+  updateLayer,
+  attemptUpdateLayerScript,
+}: {
+  layer: LayerInstance;
+  updateLayer: (id: string, patch: Partial<LayerInstance>) => void;
+  attemptUpdateLayerScript: (id: string, source: string) => Promise<ScriptCompileValidationResult>;
+}) {
+  const script = layer.script ?? {
+    enabled: false,
+    source: defaultLayerScriptSource,
+  };
+
+  return (
+    <div className="inspector-section">
+      <h4>Script</h4>
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={script.enabled}
+          onChange={(event) =>
+            updateLayer(layer.id, {
+              script: {
+                enabled: event.target.checked,
+                source: script.source,
+              },
+            })
+          }
+        />
+        Enabled
+      </label>
+
+      <ScriptEditor source={script.source} onApply={(source) => attemptUpdateLayerScript(layer.id, source)} />
+    </div>
+  );
+}
+
+const defaultLayerScriptSource = `return {};`;
 
 function toNumberOrUndefined(value: string): number | undefined {
   const trimmed = value.trim();
