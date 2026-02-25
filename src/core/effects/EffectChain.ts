@@ -1,4 +1,12 @@
-import type { Camera, Scene, WebGLRenderer } from 'three';
+import {
+  LinearFilter,
+  RGBAFormat,
+  UnsignedByteType,
+  WebGLRenderTarget,
+  type Camera,
+  type Scene,
+  type WebGLRenderer,
+} from 'three';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -35,13 +43,13 @@ export class EffectChain {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
-    this.composer = new EffectComposer(renderer);
+    this.composer = createComposer(renderer);
     this.sync([], 0);
   }
 
   sync(effects: EffectInstance[], projectSeed: number): void {
     this.composer.dispose();
-    this.composer = new EffectComposer(this.renderer);
+    this.composer = createComposer(this.renderer);
     this.managedPasses.length = 0;
 
     const renderPass = new RenderPass(this.scene, this.camera);
@@ -129,4 +137,17 @@ function isZeroBuffer(buffer: Uint8Array): boolean {
     }
   }
   return true;
+}
+
+function createComposer(renderer: WebGLRenderer): EffectComposer {
+  // Use byte render targets so readRenderTargetPixels into Uint8Array is reliable for PNG export.
+  const target = new WebGLRenderTarget(1, 1, {
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+    format: RGBAFormat,
+    type: UnsignedByteType,
+    depthBuffer: true,
+    stencilBuffer: false,
+  });
+  return new EffectComposer(renderer, target);
 }

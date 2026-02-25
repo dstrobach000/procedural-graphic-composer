@@ -32,6 +32,8 @@ export type LayoutPreset = {
   name: string;
   width: number;
   height: number;
+  bleedMM?: number;
+  dpi?: number;
 };
 
 export type Project = {
@@ -148,6 +150,8 @@ const layoutPresetSchema: z.ZodType<LayoutPreset> = z.object({
   name: z.string().min(1),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
+  bleedMM: z.number().positive().optional(),
+  dpi: z.number().positive().optional(),
 });
 
 const snapshotSchema: z.ZodType<Snapshot> = z.lazy(() =>

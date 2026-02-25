@@ -1,6 +1,7 @@
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import type { Engine } from '../engine/Engine';
+import type { ExportCameraBounds } from './layoutExport';
 import { pixelsToPNGBytes } from './png';
 
 export type ExportSize = {
@@ -8,12 +9,23 @@ export type ExportSize = {
   height: number;
 };
 
-export async function exportPNG(engine: Engine, size: ExportSize): Promise<string | null> {
-  const pixels = await engine.renderToImage(size.width, size.height);
+export type ExportPNGOptions = {
+  cameraBounds?: ExportCameraBounds;
+  fileName?: string;
+};
+
+export async function exportPNG(
+  engine: Engine,
+  size: ExportSize,
+  options: ExportPNGOptions = {},
+): Promise<string | null> {
+  const pixels = await engine.renderToImage(size.width, size.height, {
+    cameraBounds: options.cameraBounds,
+  });
   const pngBytes = await pixelsToPNGBytes(pixels, size.width, size.height);
   const path = await save({
     title: 'Export PNG',
-    defaultPath: `export-${size.width}x${size.height}.png`,
+    defaultPath: options.fileName ?? `export-${size.width}x${size.height}.png`,
     filters: [{ name: 'PNG', extensions: ['png'] }],
   });
 

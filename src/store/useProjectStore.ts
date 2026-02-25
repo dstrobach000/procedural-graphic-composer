@@ -7,6 +7,7 @@ import type {
   ShaderCompileValidationResult,
 } from '../core/engine/Engine';
 import { exportPNG as exportPNGFile } from '../core/export/exportPNG';
+import { resolveLayoutExportTarget } from '../core/export/layoutExport';
 import type { ExportPresetId } from '../core/export/presets';
 import { getPresetById } from '../core/export/presets';
 import type { LayerInstance } from '../core/layers/Layer';
@@ -469,6 +470,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
               width: getPresetById(presetId).width,
               height: getPresetById(presetId).height,
             };
+
+      if (presetId === 'current-layout') {
+        const activeLayout = project.layouts[project.activeLayoutId];
+        if (!activeLayout) {
+          throw new Error(`Active layout "${project.activeLayoutId}" is missing.`);
+        }
+        const target = resolveLayoutExportTarget(activeLayout);
+        const path = await exportPNGFile(
+          engine,
+          { width: target.exportWidth, height: target.exportHeight },
+          {
+            cameraBounds: target.cameraBounds,
+            fileName: `export-${activeLayout.id}.png`,
+          },
+        );
+        if (path) {
+          get().notify(`PNG exported: ${path}`);
+        }
+        return;
+      }
 
       const path = await exportPNGFile(engine, size);
       if (path) {

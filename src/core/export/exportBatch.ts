@@ -2,6 +2,7 @@ import { join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import type { Engine } from '../engine/Engine';
 import type { Project } from '../project/schema';
+import { resolveLayoutExportTarget } from './layoutExport';
 import { pixelsToPNGBytes } from './png';
 
 export type BatchExportOptions = {
@@ -61,8 +62,11 @@ export async function exportBatch(
 
       await engine.syncProject(snapshotProject);
 
-      const pixels = await engine.renderToImage(layout.width, layout.height);
-      const pngBytes = await pixelsToPNGBytes(pixels, layout.width, layout.height);
+      const target = resolveLayoutExportTarget(layout);
+      const pixels = await engine.renderToImage(target.exportWidth, target.exportHeight, {
+        cameraBounds: target.cameraBounds,
+      });
+      const pngBytes = await pixelsToPNGBytes(pixels, target.exportWidth, target.exportHeight);
       const path = await join(options.directory, `${job.fileStem}.png`);
       await writeFile(path, pngBytes);
       files.push(path);

@@ -6,7 +6,8 @@ These rules are strict for v0.1 and future updates.
 
 - Keep v0.1 scoped to the approved MVP only.
 - Do not add Next.js.
-- Do not add non-MVP features (PDF, crop marks, bleed, 3D layers, SVG/text layers, effect graph UI).
+- Current baseline includes: `image`/`shader`/`text` layers, layout presets, batch export, and export-only bleed via layout metadata.
+- Do not add beyond current baseline without explicit request (PDF, crop marks, 3D layers, SVG layers, effect graph UI, per-layout layer overrides, cross-layer scripting).
 
 ## Determinism Rules
 
@@ -44,6 +45,8 @@ These rules are strict for v0.1 and future updates.
 - Blend modes mapping must stay explicit and tested.
 - Any export path must render at target resolution, never viewport screenshot shortcuts.
 - Batch export must run from cloned snapshot state and restore original engine state after completion.
+- Bleed is export-only framing expansion; never mutate working canvas/layer transforms to apply bleed.
+- Export readback must remain byte-stable (use render targets/settings compatible with deterministic `readRenderTargetPixels`).
 
 ## Render Determinism Rule
 
@@ -56,6 +59,7 @@ These rules are strict for v0.1 and future updates.
 - Maintain deterministic unit tests for PRNG/hash/variation.
 - Keep schema validation tests current when model evolves.
 - Keep store utility tests for reordering and snapshot behavior.
+- Keep print/export determinism checks runnable via `node scripts/check-print-determinism.mjs`.
 
 ## Change Discipline
 
@@ -63,4 +67,5 @@ These rules are strict for v0.1 and future updates.
   - implementation
   - tests
   - README (if behavior changes)
+- Keep `README.md` and `AGENTS.md` aligned with actual shipped behavior.
 - Do not refactor away modular folders into monoliths.

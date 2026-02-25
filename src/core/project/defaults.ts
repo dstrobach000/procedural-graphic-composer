@@ -44,6 +44,8 @@ export function createDefaultProject(): Project {
       name: 'A3 (300dpi)',
       width: 3508,
       height: 4961,
+      bleedMM: 3,
+      dpi: 300,
     },
   } as const;
 

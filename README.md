@@ -12,6 +12,7 @@ Local desktop procedural graphics composer built with Tauri v2, React, TypeScrip
 - Layout presets (`activeLayoutId` + camera/canvas framing)
 - PNG export at target render size (not viewport screenshot)
 - Batch export PNG across selected snapshots and layouts
+- Automatic symmetrical bleed on export when layout defines `bleedMM` + `dpi`
 - Script tab foundation (layer-local, runtime-only patches)
 - Save/load `project.json` with zod schema validation
 
@@ -42,6 +43,19 @@ Local desktop procedural graphics composer built with Tauri v2, React, TypeScrip
 - Tests: `npm run test`
 - Production build: `npm run build`
 
+## Determinism Verification
+
+Run a dedicated print/export determinism check:
+
+- Start app: `npm run dev`
+- Run verifier: `node scripts/check-print-determinism.mjs`
+
+The script validates:
+
+- A3 export with bleed is identical across repeated runs
+- Layout round-trip (`instagramPortrait -> a3_300dpi`) keeps A3 export hash stable
+- Batch export (`2 snapshots x A3`) is identical across repeated runs
+
 ## How To Use v0.1
 
 1. Launch app with `npm run tauri:dev`.
@@ -66,6 +80,7 @@ Local desktop procedural graphics composer built with Tauri v2, React, TypeScrip
    - Preset: A3 `3508x4961`
    - Preset: A6 `1748x1240`
    - Custom: set width/height and export.
+   - Print layouts with `bleedMM` + `dpi` automatically export with symmetrical bleed expansion.
 10. Use **Batch Export** to export selected snapshots across selected common layouts into one folder.
 11. In **Script** section, enable script per layer and return runtime patch objects:
    - `return { transform: { y: Math.sin(time) * 12 } };`
@@ -84,7 +99,7 @@ Local desktop procedural graphics composer built with Tauri v2, React, TypeScrip
 
 ## Known v0.1 Limits
 
-- No PDF export, crop marks, or bleed
+- No PDF export, crop marks, or CMYK/overprint simulation
 - No 3D layers
 - No SVG layers
 - No effect graph editor (ordered list only)

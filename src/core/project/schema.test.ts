@@ -132,4 +132,13 @@ describe('project schema', () => {
     const parsedTextLayer = parsed.layers[0];
     expect(parsedTextLayer?.type).toBe('text');
   });
+
+  it('parses layouts with bleed metadata', () => {
+    const project = createDefaultProject();
+    const parsed = parseProject(project);
+
+    const a3 = parsed.layouts.a3_300dpi;
+    expect(a3?.bleedMM).toBe(3);
+    expect(a3?.dpi).toBe(300);
+  });
 });

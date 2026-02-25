@@ -16,6 +16,14 @@ export type ShaderCompileValidationResult =
 
 export type ScriptCompileValidationResult = LayerScriptValidationResult;
 
+export type RenderToImageOptions = {
+  cameraBounds?: {
+    trimWidth: number;
+    trimHeight: number;
+    bleedPx: number;
+  };
+};
+
 export class Engine {
   private readonly options: EngineOptions;
 
@@ -80,7 +88,7 @@ export class Engine {
     this.effectChain.render(elapsed, this.viewportSize.x, this.viewportSize.y);
   }
 
-  async renderToImage(width: number, height: number): Promise<Uint8Array> {
+  async renderToImage(width: number, height: number, options: RenderToImageOptions = {}): Promise<Uint8Array> {
     if (this.disposed) {
       throw new Error('Engine has been disposed');
     }
@@ -100,6 +108,18 @@ export class Engine {
     exportRenderer.setSize(width, height, false);
 
     const exportCamera = this.sceneRoot.camera.clone() as OrthographicCamera;
+    if (options.cameraBounds && options.cameraBounds.bleedPx > 0) {
+      const trimWidth = Math.max(1, options.cameraBounds.trimWidth);
+      const trimHeight = Math.max(1, options.cameraBounds.trimHeight);
+      const bleedPx = Math.max(0, options.cameraBounds.bleedPx);
+
+      exportCamera.left = -trimWidth / 2 - bleedPx;
+      exportCamera.right = trimWidth / 2 + bleedPx;
+      exportCamera.top = trimHeight / 2 + bleedPx;
+      exportCamera.bottom = -trimHeight / 2 - bleedPx;
+      exportCamera.updateProjectionMatrix();
+    }
+
     const exportChain = new EffectChain(exportRenderer, this.sceneRoot.scene, exportCamera);
     exportChain.sync(this.lastProject.effectChain, this.lastProject.seed);
     exportChain.setSize(width, height);
